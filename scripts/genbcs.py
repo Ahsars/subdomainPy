@@ -74,7 +74,8 @@ def main(fulldir, subdir, sbtiminc):
               "the full domain parameter nspoolgs (="+str(full.nspoolgs)+")"
         print "Setting sbtiminc to",full.nspoolgs
         sbtiminc = full.nspoolgs
-        
+    # Reading frequency for the fort.065
+    readFrequency = sbtiminc/full.nspoolgs    
     print "\n\t Writing fort.019 at",sub.dir,"\n"
 
     # Open subdomain b.c. file:
@@ -84,7 +85,8 @@ def main(fulldir, subdir, sbtiminc):
     if runtype=="s":
         for i in range(full.nrtimesteps):
             full.readFort065()
-            sub.writeFort019(full)
+            if i%readFrequency==0:
+                sub.writeFort019(full)
             #print out percentage
             if i%1000==0:
                 sys.stdout.write('\r')
@@ -95,7 +97,8 @@ def main(fulldir, subdir, sbtiminc):
         for i in range(full.nrtimesteps):
             full.readFort065_parallel()
             if i==0: sub.createProcMapping(full)
-            sub.writeFort019_parallel(full)
+            if i%readFrequency==0:
+                sub.writeFort019_parallel(full)
             #print out percentage
             if i%1000==0:
                 sys.stdout.write('\r')
@@ -129,4 +132,3 @@ if __name__== "__main__":
         main(sys.argv[1],sys.argv[2],sys.argv[3])
     else:
         usage()
-
