@@ -20,16 +20,54 @@ from csm import Domain, SubShape
 # Determines the nodes of a full domain that fall within a subdomain with 
 # the given circular shape
 def trimNodesCircle(full,sub,shape):
+
+    sub.nodesTmp = [None]
+    sub.subToFullNodeTmp = dict()
+    sub.fullToSubNodeTmp = dict()
     sub.nodes = [None]
     sub.subToFullNode = dict()
     sub.fullToSubNode = dict()
     for n in range(1,len(full.nodes)):
         node = full.nodes[n]
         if ( (shape.x-node[0])**2 + (shape.y-node[1])**2 < (shape.r)**2):
-            sub.subToFullNode[len(sub.nodes)] = n
-            sub.fullToSubNode[n] = len(sub.nodes)
-            sub.nodes.append(node)
+            sub.subToFullNodeTmp[len(sub.nodesTmp)] = n
+            sub.fullToSubNodeTmp[n] = len(sub.nodesTmp)
+            sub.nodesTmp.append(node)
+			
+    # Get the number of the neighbor nodes and elements
+    fullEles, fullNeighbors = neighborElementsAndNodes(full)
+	
+    # Initialize subdomain properties:
+    sub.elements = [None]
     
+    # Mapping from subdomain node numbering to full domain node numbering
+    sub.subToFullEle = dict()
+
+    # Loop through full domain elements and determine the ones inside the subdomain.
+    # Also, determine the list of subdomain boundary nodes
+    for e in range(1,len(full.elements)):
+	
+        ele = full.elements[e]
+        # incSubNode[i] is True if i.th node of element e is in the subdomain
+        incSubNode = [False]*3
+        nSubNodes = 0
+        for i in range(3):
+            incSubNode[i] = ele[i] in sub.fullToSubNodeTmp    
+            nSubNodes = nSubNodes + incSubNode[i]
+
+        if nSubNodes==3:
+											
+            for i in range(3):
+                if not ele[i] in sub.fullToSubNode:
+                    node = full.nodes[ele[i]]
+                    sub.fullToSubNode[ele[i]] = len(sub.nodes)
+                    sub.subToFullNode[len(sub.nodes)] = ele[i]
+                    sub.nodes.append(node)
+					
+            sub.subToFullEle[len(sub.elements)] = e
+            sub.elements.append([sub.fullToSubNode[ele[0]], \
+                                 sub.fullToSubNode[ele[1]], \
+                                 sub.fullToSubNode[ele[2]]])
 # Determines the nodes of a full domain that fall within a subdomain with 
 # the given elliptical shape
 def trimNodesEllipse(full,sub,shape):
@@ -52,20 +90,23 @@ def trimNodesEllipse(full,sub,shape):
 # Determines the elements of a full domain that fall within a subdomain
 def trimElements(full,sub):
 
+    # Get the number of the neighbor nodes and elements
+    fullEles, fullNeighbors = neighborElementsAndNodes(full)
+	
     # Initialize subdomain properties:
-    sub.elements = [None]
+    #sub.elements = [None]
     sub.neta = 0            # total number of sub. boundary nodes
     sub.nbdvSet = set()        # set of sub. boundary nodes
     sub.isSubBoundary = [False]*(len(sub.nodes)+1) # True if i.th node is sub. boundary 
     
     # Mapping from subdomain node numbering to full domain node numbering
-    sub.subToFullEle = dict()
+    #sub.subToFullEle = dict()
 
     # Loop through full domain elements and determine the ones inside the subdomain.
     # Also, determine the list of subdomain boundary nodes
     for e in range(1,len(full.elements)):
         ele = full.elements[e]
-        
+        boundaryNodeExist = False
         # incSubNode[i] is True if i.th node of element e is in the subdomain
         incSubNode = [False]*3
         nSubNodes = 0
@@ -74,21 +115,75 @@ def trimElements(full,sub):
             nSubNodes = nSubNodes + incSubNode[i]
 
         if nSubNodes==3:
-            # The element is inside the subdomain:
-            sub.subToFullEle[len(sub.elements)] = e
-            sub.elements.append([sub.fullToSubNode[ele[0]], \
-                                 sub.fullToSubNode[ele[1]], \
-                                 sub.fullToSubNode[ele[2]]])
+		
+            # The element is inside the subdomain else if the number of 
+            # the neighbor nodes is larger than the neighbor elements
+            # in which it is considered as a boundary node:
+            for i in range(3):
+                if len(fullEles[ele[i]]) < len(fullNeighbors[ele[i]]):			
+                    sub.nbdvSet.add(sub.fullToSubNode[ele[i]])
+                    sub.isSubBoundary[sub.fullToSubNode[ele[i]]] = True
+                    boundaryNodeExist = True	
+									
+#            sub.subToFullEle[len(sub.elements)] = e
+#            sub.elements.append([sub.fullToSubNode[ele[0]], \
+#                                 sub.fullToSubNode[ele[1]], \
+#                                 sub.fullToSubNode[ele[2]]])
+
 
         elif not nSubNodes==0:
             # The element is outside the subdomain, but adjacent to subdomain.
             # Determine the boundary nodes:
             for i in range(3):
-                if incSubNode[i]: 
+                if incSubNode[i]: # A boundary node should have at least 1 neighbor element including itself in the subdomain 
+#                    neighborEleInSub = False    
+#                    for neighborEle in fullEles[ele[i]]:  # check all neighbor elements of the node
+#                        neighborEle = full.elements[neighborEle]
+#                        isSubNode = [False]*3
+#                        nNeighborSubNodes = 0
+#                        for j in range(3):
+#                            isSubNode[j] = neighborEle[j] in sub.fullToSubNode    
+#                            nNeighborSubNodes = nNeighborSubNodes + isSubNode[j]                           	
+#                        if nNeighborSubNodes==3:                  # all 3 nodes in the subdomain means an element is in subdomain
+#                            neighborEleInSub = True 
+
+#                    if neighborEleInSub == True:				
                     sub.nbdvSet.add(sub.fullToSubNode[ele[i]])
                     sub.isSubBoundary[sub.fullToSubNode[ele[i]]] = True
+ #                   else:
+  #                      node = full.nodes[ele[i]]
+ #                       if node in sub.nodes:
+ #                           print 'isolated node',node,'being deleted'
+ #                           print 'nSubNodes=',len(sub.nodes)
+ #                           sub.nodes.remove(node)
+ #                           del sub.subToFullNode[sub.fullToSubNode[ele[i]]] 
+ #   sub.subToFullNodeTmp = dict(zip(range(1,len(sub.subToFullNode)+1),sub.subToFullNode.values()))	
+ #   del sub.subToFullNode
+ #   del sub.fullToSubNode
+ #   sub.subToFullNode = sub.subToFullNodeTmp
+ #   sub.fullToSubNode = dict(zip(sub.subToFullNode.values(),sub.subToFullNode.keys()))
+ #   del sub.subToFullNodeTmp
+  #  return 	sub.subToFullNode
 
 # Re-orders the list of boundary nodes of a subdomain
+def neighborElementsAndNodes(full):
+
+    # Determine the neighbors and elements of subdomain boundary nodes: 
+    fullEles = [None]*(len(full.nodes)+1)        # set of elements for each node
+    fullNeighbors = [None]*(len(full.nodes)+1)   # set of neighbors for each node	
+    for i in range(1,len(full.nodes)+1):
+        fullEles[i] = set()
+        fullNeighbors[i] = set()
+    for e in range(1,len(full.elements)):
+        for i in range(3):
+            node = full.elements[e][i]
+            fullEles[node].add(e)
+            if not full.elements[e][(i+1)%3] in fullNeighbors[node]:
+                fullNeighbors[node].add(full.elements[e][(i+1)%3])
+            if not full.elements[e][(i+2)%3] in fullNeighbors[node]:	
+                fullNeighbors[node].add(full.elements[e][(i+2)%3])	
+    return fullEles,fullNeighbors		
+
 def orderBoundaryNodes(sub):
 
     # Determine the neighbors and elements of subdomain boundary nodes:
@@ -125,6 +220,7 @@ def orderBoundaryNodes(sub):
         for neig in neighbors[sub.nbdv[-1]]:
             if (sub.isSubBoundary[neig] and not isAdded[neig]):
                 nCommonEles = len(eles[sub.nbdv[-1]].intersection(eles[neig]))
+                
                 if nCommonEles==1:
                     addBoundaryNode(neig)
                     progressed = True
@@ -340,5 +436,3 @@ if __name__== "__main__":
         main(sys.argv[1],sys.argv[2])
     else:
         usage()
-
-
