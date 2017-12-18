@@ -2,7 +2,12 @@
 #   Copyright (C) 2017 
 #   Computational Modeling Group, NCSU <http://www4.ncsu.edu/~jwb/>
 #   Alper Altuntas <alperaltuntas@gmail.com>
-
+#-------------------------------------------------------------------#
+#   Modified by Xing Liu <xing.liu1990@outlook.com> on 12/18/2017
+#       The script is modified to cross the land and island boundary 
+#       of the Fulldomain, but it can not hold a case that include other
+#       boundaries in the subdomain.
+#-------------------------------------------------------------------#
 import os
 import sys
 import numpy
@@ -151,7 +156,7 @@ def trimElements(full,sub):
                     sub.nbdvSet.add(sub.fullToSubNode[ele[i]])
                     sub.isSubBoundary[sub.fullToSubNode[ele[i]]] = True
  #                   else:
-  #                      node = full.nodes[ele[i]]
+ #                       node = full.nodes[ele[i]]
  #                       if node in sub.nodes:
  #                           print 'isolated node',node,'being deleted'
  #                           print 'nSubNodes=',len(sub.nodes)
@@ -163,7 +168,7 @@ def trimElements(full,sub):
  #   sub.subToFullNode = sub.subToFullNodeTmp
  #   sub.fullToSubNode = dict(zip(sub.subToFullNode.values(),sub.subToFullNode.keys()))
  #   del sub.subToFullNodeTmp
-  #  return 	sub.subToFullNode
+ #   return 	sub.subToFullNode
 
 # Re-orders the list of boundary nodes of a subdomain
 def neighborElementsAndNodes(full):
@@ -226,7 +231,7 @@ def orderBoundaryNodes(sub):
                     progressed = True
                     break
         if not progressed: 
-            print "ERROR: Encountered error while reordering the list of boundary nodes.\n"
+            print("ERROR: Encountered error while reordering the list of boundary nodes.\n")
             exit()
             break
 
@@ -235,7 +240,7 @@ def orderBoundaryNodes(sub):
 
 
 def writeFort14(sub,header):
-    print "\t Writing fort.14 at",sub.dir
+    print("\t Writing fort.14 at",sub.dir)
     
     fort14 = open(sub.dir+"fort.14",'w')
    
@@ -267,7 +272,7 @@ def writeFort14(sub,header):
     fort14.close()
        
 def extractFort14(full,sub,shape):
-    print "\nExtracting fort.14:"
+    print("\nExtracting fort.14:")
 
     full.readFort14()
 
@@ -282,18 +287,18 @@ def extractFort14(full,sub,shape):
     elif (shape.typ=='e'):
         trimNodesEllipse(full,sub,shape)
     else:
-        print "ERROR: invalid subdomain shape type."
+        print("ERROR: invalid subdomain shape type.")
         exit()
 
     trimElements(full,sub)
     writeFort14(sub,full.f14header)
 
 def extractFort13(full,sub):
-    print "Extracting fort.13:"
+    print("Extracting fort.13:")
 
-    print "\t Reading fort.13 at", full.dir
+    print("\t Reading fort.13 at", full.dir)
     full13 = open(full.dir+"fort.13")
-    print "\t Writing fort.13 at", sub.dir
+    print("\t Writing fort.13 at", sub.dir)
     sub13 = open(sub.dir+"fort.13","w")
 
     # Read-write header:
@@ -319,23 +324,28 @@ def extractFort13(full,sub):
         sub13.write(full13.readline()) # parameter name
         nFullNodes = int(full13.readline().split()[0])
 
-        lines = []
+        lines = []      
         snode = 1
         def full(snode): return sub.subToFullNode[snode]
-        fnode_last = full(len(sub.nodes)-1)
+#        fnode_last = full(len(sub.nodes)-1)
+        fnode_last = max(sub.subToFullNode)
 
         for f in range(nFullNodes):
 
-            sline = full13.readline().split()
+            sline = full13.readline().split()                   
             fnode = int(sline[0])
-
-            if (not fnode>fnode_last):
-
-                while fnode > full(snode) and snode < len(sub.nodes)-1:
-                    snode += 1
-    
-                if fnode == full(snode):
-                    lines.append([snode,sline]) 
+            if fnode in sub.fullToSubNode:
+                snode = sub.fullToSubNode[fnode]	
+                lines.append([snode,sline])  	
+        	
+#        		  
+#            if (not fnode>fnode_last):
+#
+#                while fnode > full(snode) and snode < len(sub.nodes)-1:
+#                    snode += 1
+#    
+#                if fnode == full(snode):
+#                    lines.append([snode,sline]) 
 
 
         sub13.write(str(len(lines))+"\n")
@@ -350,7 +360,7 @@ def extractFort13(full,sub):
     
 # Write subdomain control file of the subdomain
 def writeFort015(sub):
-    print "Generating fort.015 at", sub.dir
+    print("Generating fort.015 at", sub.dir)
     fort015 =  open(sub.dir+"fort.015", 'w')
     fort015.write( "0" + "\t!NOUTGS" + '\n' )
     fort015.write( "0" + "\t!NSPOOLGS" + '\n' )
@@ -360,7 +370,7 @@ def writeFort015(sub):
 
 # Writes nodal and elemental mapping files of the subdomain:
 def writeNewToOld(sub):
-    print "Generating nodal and elemental mapping files at", sub.dir
+    print("Generating nodal and elemental mapping files at", sub.dir)
 
     py140 = open(sub.dir+"py.140","w")
     py140.write("Nodal mapping from sub to full\n")
@@ -377,18 +387,18 @@ def writeNewToOld(sub):
     
 
 def copySwanFiles(full,sub):
-    print "Copying SWAN input files to", sub.dir
+    print("Copying SWAN input files to", sub.dir)
     copyfile(full.dir+"fort.26",sub.dir+"fort.26")    
     copyfile(full.dir+"swaninit",sub.dir+"swaninit")    
 
 # Generate the input files of the subdomain
 def main(fullDir,subDir):
 
-    print ""
-    print '\033[95m'+'\033[1m'+"NCSU Subdomain Modeling for ADCIRC+SWAN"+'\033[0m'
-    print ""
+    print("")
+    print('\033[95m'+'\033[1m'+"NCSU Subdomain Modeling for ADCIRC+SWAN"+'\033[0m')
+    print("")
 
-    print "Generating input files for the subdomain at", subDir
+    print("Generating input files for the subdomain at", subDir)
 
     # Initialize the full and subdomains
     full = Domain(fullDir)
@@ -399,7 +409,7 @@ def main(fullDir,subDir):
          
     # Extract fort.14:
     if not os.path.exists(full.dir+"fort.14"):
-        print "ERROR: No fort.14 file exists at", full.dir
+        print("ERROR: No fort.14 file exists at", full.dir)
         exit()
     else:
         extractFort14(full,sub,shape)  
@@ -419,16 +429,16 @@ def main(fullDir,subDir):
         copySwanFiles(full,sub)
 
     # The final log message:
-    print "\nSubdomain input files are now ready."
-    print '\033[91m'+"\nImportant Note:"+'\033[0m'
-    print "fort.15 and meteorological files have to be generated manually "
-    print "by the user as described in Subdomain Modeling User Guide.\n"
+    print("\nSubdomain input files are now ready.")
+    print('\033[91m'+"\nImportant Note:"+'\033[0m')
+    print("fort.15 and meteorological files have to be generated manually ")
+    print("by the user as described in Subdomain Modeling User Guide.\n")
 
 def usage():
     scriptName = os.path.basename(__file__)
-    print ""
-    print "Usage:"
-    print " ", scriptName, "fulldomainDir subdomainDir\n"
+    print("")
+    print("Usage:")
+    print(" ", scriptName, "fulldomainDir subdomainDir\n")
 
 
 if __name__== "__main__":
